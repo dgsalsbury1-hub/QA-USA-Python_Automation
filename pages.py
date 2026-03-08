@@ -34,6 +34,10 @@ class UrbanRoutesPage:
     PHONE_NEXT_BUTTON = (By.XPATH, "//button[text()='Next']")
     SMS_CODE_INPUT = (By.ID, 'code')
     SMS_CONFIRM_BUTTON = (By.XPATH, "//button[text()='Confirm']")
+    # Assertion: phone number saved - the phone button text updates to show the number
+    PHONE_NUMBER_SAVED = (By.XPATH,
+        '//*[@id="root"]/div/div[3]/div[3]/div[2]/div[2]/div[1]/div'
+    )
 
     # Payment method
     PAYMENT_BUTTON = (By.XPATH, '//*[@id="root"]/div/div[3]/div[3]/div[2]/div[2]/div[2]/div[1]')
@@ -49,6 +53,8 @@ class UrbanRoutesPage:
     DRIVER_COMMENT = (By.XPATH, '//*[@id="comment"]')
 
     # Blanket and handkerchiefs
+    # BLANKET_TOGGLE -> click to activate
+    # BLANKET_INPUT  -> assert state (hidden checkbox)
     BLANKET_TOGGLE = (By.XPATH,
         '//*[@id="root"]/div/div[3]/div[3]/div[2]/div[2]/div[4]/div[2]/div[1]/div/div[2]/div/span'
     )
@@ -69,11 +75,7 @@ class UrbanRoutesPage:
 
     # Order button and car search modal
     ORDER_BUTTON = (By.XPATH, '//*[@id="root"]/div/div[3]/div[4]/button/span[1]')
-    CAR_SEARCH_MODAL = (By.XPATH,
-        "//div[contains(@class,'order-header-title') and contains(text(),'Look')]"
-        " | //div[contains(@class,'searching')]"
-        " | //div[@class='order-body']"
-    )
+    CAR_SEARCH_MODAL = (By.XPATH, "//div[@class='order-body']")
 
     # Overlay element
     OVERLAY = (By.XPATH, "//div[@class='overlay']")
@@ -112,11 +114,13 @@ class UrbanRoutesPage:
         field = self.wait.until(EC.element_to_be_clickable(self.FROM_FIELD))
         field.clear()
         field.send_keys(address)
+        time.sleep(2)
 
     def set_to(self, address):
         field = self.wait.until(EC.element_to_be_clickable(self.TO_FIELD))
         field.clear()
         field.send_keys(address)
+        time.sleep(2)
 
     def set_route(self, address_from, address_to):
         self.set_from(address_from)
@@ -138,20 +142,31 @@ class UrbanRoutesPage:
           1. Click Fastest route type button
           2. Click 'Call a taxi' button
           3. Click Supportive tariff icon - only if not already active
+             (if condition per project brief to avoid double-clicks)
         """
         fastest = self.wait.until(EC.element_to_be_clickable(self.FASTEST_BUTTON))
         fastest.click()
+        time.sleep(2)
 
         call_taxi = self.wait.until(EC.element_to_be_clickable(self.CALL_TAXI_BUTTON))
         call_taxi.click()
+        time.sleep(2)
 
         self.wait.until(EC.presence_of_element_located(self.SUPPORTIVE_PLAN))
         if not self.is_supportive_plan_selected():
             self._js_click(self.SUPPORTIVE_PLAN)
+        time.sleep(2)
 
     def is_supportive_plan_selected(self):
-        active = self.driver.find_elements(*self.SUPPORTIVE_PLAN_ACTIVE)
-        return len(active) > 0
+        """Returns True if the active tariff card text matches 'Supportive'."""
+        try:
+            active = self.driver.find_elements(*self.SUPPORTIVE_PLAN_ACTIVE)
+            if active:
+                title = active[0].find_element(By.XPATH, ".//div[@class='tcard-title']")
+                return title.text == 'Supportive'
+            return False
+        except Exception:
+            return False
 
     # -------------------------------------------------------------------------
     # 3. Phone number
@@ -160,26 +175,38 @@ class UrbanRoutesPage:
     def open_phone_modal(self):
         self._dismiss_overlay()
         self._js_click(self.PHONE_BUTTON)
+        time.sleep(2)
 
     def enter_phone(self, phone):
         field = self.wait.until(EC.element_to_be_clickable(self.PHONE_INPUT))
         field.clear()
         field.send_keys(phone)
+        time.sleep(2)
 
     def click_next_phone(self):
         btn = self.wait.until(EC.element_to_be_clickable(self.PHONE_NEXT_BUTTON))
         btn.click()
+        time.sleep(2)
 
     def enter_sms_code(self, code):
         """Enter the SMS code retrieved from helpers.retrieve_phone_code()."""
         field = self.wait.until(EC.element_to_be_clickable(self.SMS_CODE_INPUT))
         field.clear()
         field.send_keys(code)
+        time.sleep(2)
 
     def confirm_phone(self):
         btn = self.wait.until(EC.element_to_be_clickable(self.SMS_CONFIRM_BUTTON))
         btn.click()
-        time.sleep(1)
+        time.sleep(2)
+
+    def is_phone_number_saved(self, phone):
+        """Returns True if the phone button text matches the expected phone number."""
+        try:
+            el = self.wait.until(EC.presence_of_element_located(self.PHONE_NUMBER_SAVED))
+            return el.text.strip() == phone
+        except Exception:
+            return False
 
     # -------------------------------------------------------------------------
     # 4. Credit card
@@ -188,21 +215,22 @@ class UrbanRoutesPage:
     def open_payment_modal(self):
         self._dismiss_overlay()
         self._js_click(self.PAYMENT_BUTTON)
+        time.sleep(2)
 
     def click_add_card(self):
         btn = self.wait.until(EC.element_to_be_clickable(self.ADD_CARD_OPTION))
         btn.click()
+        time.sleep(2)
 
     def enter_card_number(self, number):
         field = self.wait.until(EC.element_to_be_clickable(self.CARD_NUMBER_INPUT))
         field.clear()
         field.send_keys(number)
+        time.sleep(2)
 
     def enter_cvv(self, code):
         """Enter CVV using JavaScript to set value, then click form to lose focus."""
-        # Wait until we are inside the card modal
         self.wait.until(EC.presence_of_element_located(self.CARD_NUMBER_INPUT))
-        # Use JS to fill the CVV field by id='code' and class='card-input'
         self.driver.execute_script("""
             var field = document.querySelector('input#code.card-input');
             if (field) {
@@ -214,18 +242,19 @@ class UrbanRoutesPage:
                 field.dispatchEvent(new Event('change', { bubbles: true }));
             }
         """, code)
-        # Click the form to trigger focus loss and enable the Link button
         form = self.driver.find_element(*self.CARD_FORM)
         form.click()
+        time.sleep(2)
 
     def click_link(self):
         btn = self.wait.until(EC.element_to_be_clickable(self.CARD_LINK_BUTTON))
         btn.click()
+        time.sleep(2)
 
     def close_payment_modal(self):
         btn = self.wait.until(EC.element_to_be_clickable(self.PAYMENT_CLOSE_BUTTON))
         btn.click()
-        time.sleep(1)
+        time.sleep(2)
 
     def add_credit_card(self, number, code):
         self.open_payment_modal()
@@ -236,8 +265,12 @@ class UrbanRoutesPage:
         self.close_payment_modal()
 
     def is_card_added(self):
-        els = self.driver.find_elements(*self.CARD_ADDED_TEXT)
-        return len(els) > 0
+        """Returns True if payment method text equals 'Card'."""
+        try:
+            el = self.wait.until(EC.presence_of_element_located(self.CARD_ADDED_TEXT))
+            return el.text.strip() == 'Card'
+        except Exception:
+            return False
 
     # -------------------------------------------------------------------------
     # 5. Driver comment
@@ -247,6 +280,7 @@ class UrbanRoutesPage:
         field = self.wait.until(EC.element_to_be_clickable(self.DRIVER_COMMENT))
         field.clear()
         field.send_keys(comment)
+        time.sleep(2)
 
     def get_comment(self):
         return self.driver.find_element(*self.DRIVER_COMMENT).get_property('value')
@@ -266,9 +300,18 @@ class UrbanRoutesPage:
         if not checkbox.is_selected():
             self._js_click(self.BLANKET_TOGGLE)
 
+    def toggle_blanket(self):
+        """Click the blanket toggle unconditionally, pausing 2 seconds before and after."""
+        self._dismiss_overlay()
+        self.wait.until(EC.presence_of_element_located(self.BLANKET_INPUT))
+        time.sleep(2)
+        self._js_click(self.BLANKET_TOGGLE)
+        time.sleep(2)
+
     def is_blanket_ordered(self):
+        """Returns True if blanket and handkerchiefs checkbox is checked."""
         checkbox = self.driver.find_element(*self.BLANKET_INPUT)
-        return checkbox.is_selected()
+        return checkbox.get_property('checked')
 
     # -------------------------------------------------------------------------
     # 7. Ice cream
@@ -277,6 +320,7 @@ class UrbanRoutesPage:
     def add_ice_cream(self):
         self._dismiss_overlay()
         self._js_click(self.ICE_CREAM_PLUS)
+        time.sleep(2)
 
     def order_ice_creams(self, quantity):
         """Loop lives in pages.py per project brief."""
@@ -284,6 +328,7 @@ class UrbanRoutesPage:
             self.add_ice_cream()
 
     def get_ice_cream_count(self):
+        """Returns the current ice cream counter value as an integer."""
         el = self.driver.find_element(*self.ICE_CREAM_VALUE)
         return int(el.text)
 
@@ -294,11 +339,24 @@ class UrbanRoutesPage:
     def click_order_taxi(self):
         self._dismiss_overlay()
         self._js_click(self.ORDER_BUTTON)
-        time.sleep(21)
+        time.sleep(32)
 
     def is_car_search_modal_visible(self):
+        """Returns True if the car search modal is displayed, False otherwise."""
         try:
-            modal = self.wait.until(EC.visibility_of_element_located(self.CAR_SEARCH_MODAL))
+            modal = self.wait.until(EC.presence_of_element_located(self.CAR_SEARCH_MODAL))
             return modal.is_displayed()
+        except Exception:
+            return False
+
+    def wait_for_order_confirmation(self):
+        """Dynamically waits up to 3 minutes for the order confirmation to appear."""
+        try:
+            confirm_wait = WebDriverWait(self.driver, 180)
+            confirm_wait.until(lambda d: d.execute_script("""
+                var el = document.querySelector('.order-header-title');
+                return el && el.innerText && el.innerText.trim().length > 0;
+            """))
+            return True
         except Exception:
             return False
